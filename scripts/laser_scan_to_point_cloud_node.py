@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 
 import sensor_msgs.point_cloud2 as pc2
 import rospy
@@ -19,4 +19,4 @@ def scan_cb(msg):
 
 rospy.Subscriber("/scan", LaserScan, scan_cb, queue_size=1)
 rospy.Subscriber("/kobuki/sensors/rplidar", LaserScan, scan_cb, queue_size=1)
-rospy.spin()
+rospy.spin() 
