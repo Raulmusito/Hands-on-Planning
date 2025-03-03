@@ -6,6 +6,7 @@ import numpy as np
 from Node import Node
 import copy
 import random 
+import matplotlib.pyplot as plt
 
 
 def wrap_angle(angle): 
@@ -13,7 +14,7 @@ def wrap_angle(angle):
 
 
 def dist_between_points (p1, p2):
-    return np.linalg.norm(p1-p2)
+    return m.sqrt((p2.coord[0] - p1.coord[0])**2 + (p2.coord[1] - p1.coord[1])**2)
 
 
 class StateValidityChecker:
@@ -35,12 +36,15 @@ class StateValidityChecker:
         self.is_unknown_valid = is_unknown_valid    
 
     def map_set(self, map):
-        print(map[40])
         bin_map = np.zeros_like(map)
         for i in range(map.shape[0]):
             for j in range(map.shape[1]):
-                if map[i,j] == -1 or map[i,j] == 100:
+                if map[i,j] !=0:
                     bin_map[i,j] = 1
+        plt.imshow(bin_map)
+        plt.colorbar()  # Optional: to show the color bar
+        plt.title("Grayscale Image")
+        plt.show()
         return bin_map
     
     # Set occupancy map, its resolution and origin. 
