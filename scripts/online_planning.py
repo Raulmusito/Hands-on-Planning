@@ -5,11 +5,16 @@ import math as m
 import numpy as np
 from Node import Node
 import copy
-import random
+import random 
 
 
 def wrap_angle(angle): 
     return (angle + ( 2.0 * np.pi * np.floor( ( np.pi - angle ) / ( 2.0 * np.pi ) ) ) )
+
+
+def dist_between_points (p1, p2):
+    return np.linalg.norm(p1-p2)
+
 
 class StateValidityChecker:
     """ Checks if a position or a path is valid given an occupancy map."""
@@ -28,10 +33,19 @@ class StateValidityChecker:
         self.distance = distance                    
         # if True, unknown space is considered valid
         self.is_unknown_valid = is_unknown_valid    
+
+    def map_set(self, map):
+        print(map[40])
+        bin_map = np.zeros_like(map)
+        for i in range(map.shape[0]):
+            for j in range(map.shape[1]):
+                if map[i,j] == -1 or map[i,j] == 100:
+                    bin_map[i,j] = 1
+        return bin_map
     
     # Set occupancy map, its resolution and origin. 
     def set(self, data, resolution, origin):
-        self.map = data
+        self.map = self.map_set(data)
         self.resolution = resolution
         self.origin = np.array(origin)
         self.there_is_map = True
@@ -61,7 +75,7 @@ class StateValidityChecker:
         print (map[fromx:tox,fromy:toy])
         for i in range(fromx, tox):
             for j in range(fromy, toy):
-                if map[i,j] > 50: return False
+                if map[i,j] == 0: return False
         return True
 
     # Given a path, returs true if thaose path is not in collision and false othewise.
@@ -71,14 +85,18 @@ class StateValidityChecker:
         # TODO: for each point check if `is_valid``. If only one element is not valid return False, otherwise True. 
 
     # Transform position with respect the map origin to cell coordinates
-    def position_to_map__(point, origin, resolution, shape):
+    def position_to_map(self, point):
+        origin = self.origin
+        resolution = self.resolution
+        shape = self.map.shape
+
         # this function variates from the requiered, since it asumes that the reference from the grid map is in the top left corner 
         x,y = point-origin #x,y are already in map (occupancy grid) coordinates
         xmap, ymap =  int(x/resolution), shape[1] - int(y/resolution)
         if x < 0 or y < 0 or x > shape[0] or y > shape[1]: return None
         else: return np.array([xmap,ymap])
 
-    def map_to_position__(m, origin, resolution, shape):
+    def map_to_position(m, origin, resolution, shape):
         if m[0] < 0 or m[1] < 0 or m[0] > shape[0] or m[1] > shape[1]: return None
         x,y = m[0]*resolution, (-m[1] + shape[1] )*resolution 
         x,y = x + origin[0],y+ origin[1]
@@ -86,11 +104,23 @@ class StateValidityChecker:
     
 # Define Planner class (you can take code from Autonopmous Systems course!)
 class Planner:
-    def  __init__(self, state_validity_checker, max_iterations=10000, dominion=[-10, 10, -10, 10]):
+    def  __init__(self, state_validity_checker, max_iterations=10000, dominion=[-10, 10, -10, 10], goal=None, start=None, step_size=0.5, goal_threshold=0.5):
         # define constructor ...
+        self.max_iterations = max_iterations
+        print (goal[0], "    ", goal[1])
+        self.goal = Node(goal[0], goal[1])##
+        self.start = Node(start[0], start[1])
+        self.tree = [self.start]
+        self.robot_distance = state_validity_checker.distance
+        self.map_resolution = state_validity_checker.resolution
+        self.goal_threshold = goal_threshold
+ 
+        self.step_size = 0.5
+        self.map = (self, state_validity_checker.map)
         pass
-    def compute_path(self, q_start, q_goal):
-        for k in range(self.max_iter):
+    
+    def compute_path(self):
+        for k in range(self.max_iterations):
             # 1. Sample a random node
             random_node = self.get_random_node(0.2) 
 
@@ -100,20 +130,21 @@ class Planner:
             # 3. New configuration
             qnew = self.new_config(nearest, random_node, self.step_size)
 
-
+            # 4. Check if the new configuration is collision free
             if self.collision_free((nearest.x,nearest.y), (qnew.x,qnew.y)):
                 qnew.parent = nearest
+
                 # 5. Check if goal is reached
                 self.tree.append(qnew)
                 
-                if self.distance(qnew, self.goal) <= self.goal_threshold:
-                    print(f"Goal reached in {k} iterations")
-                    ns_nodes = copy.deepcopy(self.tree)
-                    ns_edges = copy.deepcopy(self.get_edges(self.tree))
+                if dist_between_points(qnew, self.goal) <= self.goal_threshold:
+                    #print(f"Goal reached in {k} iterations")
+                    """ 
                     if self.pth_found_after == None: 
                         self.pth_found_after=k
-
-                    return self.tree, self.get_edges(self.tree)
+                     """
+                    return self.tree, self.build_path(qnew)
+                    
         raise AssertionError("Path not found\n")
         pass
 
@@ -121,7 +152,8 @@ class Planner:
         if random.random() < p:
             return self.goal
         # Get all free cells (where grid is 0)
-        free_positions = np.argwhere(self.map.grid == 0)
+        print(self.map)
+        free_positions = np.argwhere(self.map == 0)
         # Randomly choose one of the free cells 
         random_index = np.random.choice(len(free_positions))
         node = Node(free_positions[random_index][0],free_positions[random_index][1])
@@ -129,26 +161,81 @@ class Planner:
         return node
     
     def nearest_node(self, random_node):
-        return min(self.tree, key=lambda node: self.distance(node, random_node))
+        return min(self.tree, key=lambda node: dist_between_points(node, random_node))
     
     def new_config(self, nearest, random_node, step_size):
-        distance = self.distance(nearest, random_node)
+        distance = dist_between_points(nearest, random_node)
         if distance <= step_size:
             return random_node
         else:
             theta = m.atan2(random_node.coord[1] - nearest.coord[1], random_node.coord[0] - nearest.coord[0])
             return Node(int(nearest.coord[0] + step_size * m.cos(theta)), int(nearest.coord[1] + step_size * m.sin(theta)))
+        
+    def collision_free(self, point1, point2):
+        num_steps = max(abs(point2[0] - point1[0]), abs(point2[1] - point1[1])) + 1
+        # Interpolate x and y coordinates
+        x_values = np.linspace(point1[0], point2[0], num_steps)
+        y_values = np.linspace(point1[1], point2[1], num_steps)
+
+        # Combine x and y into pixel coordinates
+        pixels = list(zip((np.floor(x_values)).astype(int), (np.floor(y_values)).astype(int)))
+
+        for i,p in enumerate(pixels):
+            if 0 <= p[0] < self.map.grid.shape[0] and 0 <= p[1] < self.map.grid.shape[1]:
+                if self.is_valid_pixel(self,p) == False:
+                    return False
+        return True
+
+    def is_valid_pixel (self, pixel):
+
+        # y is row, x is column
+        robot_area_p = self.robot_distance / self.map_resolution
+        fromx, fromy = pixel[0]-robot_area_p, pixel[1]-robot_area_p 
+        tox, toy = pixel[0] + robot_area_p, pixel[1]+robot_area_p, # get x,y pixels from bottom right corner of the robot threshold
+
+        #print ("top left corner pixels:", fromx,fromy)
+        #print ("botom right corner: ", tox,toy)
+        #print (map[fromx:tox,fromy:toy])
+        if fromx < 0 and fromy < 0 and tox > self.map.shape[0] and toy > self.map.shape[1]: return False
+        for i in range(fromy, toy):
+            for j in range(fromx, tox):
+                if map[i,j] == 0: return False
+        return True
+    
+    def get_edges(self,nodes):
+        edges = []
+        for node in nodes:
+            if node.parent:
+                edges.append((nodes.index(node.parent), nodes.index(node)))
+        return edges
+    
     
     def smooth_path(self):
         # Optionally, you can implement a finction to smooth the RRT path.
         pass
-    #def  # If you need any auxiliar method include it in this class
+
+    def build_path(self, node):
+        path = []
+        while node.parent is not None:
+            path.append(node.coord)
+            node = node.parent
+        path.append(node.coord)
+        return path.reverse()
+
 
 
 # Planner: This function has to plan a path from start_p to goal_p. To check if a position is valid the 
 # StateValidityChecker class has to be used. The planning dominion must be specified as well as the maximum planning time.
 # The planner returns a path that is a list of poses ([x, y]).
-def compute_path(start_p, goal_p, state_validity_checker, dominion, max_iterations=1000):
+def compute_path(start_p, goal_p, state_validity_checker, dominion, max_iterations=5000):
+    start_p, goal_p = state_validity_checker.position_to_map(start_p), state_validity_checker.position_to_map(goal_p)
+    planner = Planner(state_validity_checker, max_iterations, dominion, goal_p, start_p)
+    tree, path = planner.compute_path()
+    for i in range(len(path)):
+        path[i] = [state_validity_checker.map_to_position(path[i][0]), state_validity_checker.map_to_position(path[i][1])]
+    return path
+
+
 
     # TODO: Plan a path from start_p to goal_p inside dominiont using a Planner Object and the 
     # StateValidityChecker Object previously defined.
@@ -176,6 +263,3 @@ def move_to_point(current, current_yaw, goal, Kv=0.5, Kw=0.5):
         v = Kv * dist_between_points(current,goal)
     
     return  v, w
-
-def dist_between_points (p1, p2):
-    return np.linalg.norm(p1-p2)

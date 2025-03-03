@@ -5,7 +5,7 @@ import math as m
 import rospy
 import tf
 import functions as f
-
+ 
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from visualization_msgs.msg import Marker
@@ -50,7 +50,7 @@ class OnlinePlanner:
         # Publisher for sending velocity commands to the robot
         self.cmd_pub =  rospy.Publisher(cmd_vel_topic, Twist, queue_size=1)# TODO: publisher to cmd_vel_topic
         # Publisher for visualizing the path to with rviz
-        self.marker_pub = rospy.Publisher('~path_marker', Marker, queue_size=1)
+        self.marker_pub = rospy.Publisher('/path_marker', Marker, queue_size=1)
         
         # SUBSCRIBERS
         self.gridmap_sub = rospy.Subscriber("/projected_map", OccupancyGrid, self.get_gridmap) #subscriber to gridmap_topic from Octomap Server  
@@ -113,12 +113,10 @@ class OnlinePlanner:
     # Solve plan from current position to self.goal. 
     def plan(self):
         # Invalidate previous plan if available
-        self.path = []
 
         print("Compute new path")
         # TODO: plan a path from self.current_pose to self.goal
-        #self.path = compute_path
-        self.path = [[self.goal[0], self.goal[1]]]
+        self.path = compute_path(self.current_pose[0:2], self.goal[0:2], self.svc, self.dominion )
         # TODO: If planning fails, consider increasing the planning time, retry the planning a few times, etc.
         #pass
 
@@ -137,7 +135,7 @@ class OnlinePlanner:
     def controller(self, event):
         v = 0
         w = 0
-        if len(self.path) > 0:
+        if len(self.path) > 0 and 0:
             if dist_between_points(self.current_pose[0:2], self.path[0]) <= self.dist_threshold:# If current waypoint is reached with some tolerance move to the next waypoint. 
                 del self.path[0]
                 # If it was the last waypoint in the path show a message indicating it
@@ -149,7 +147,7 @@ class OnlinePlanner:
           
         
         # Publish velocity commands
-        print("v: ", v, "w: ", w)
+        #print("v: ", v, "w: ", w)
         self.__send_commnd__(v, w)
     
 

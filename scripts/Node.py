@@ -1,8 +1,8 @@
 import math
 import numpy as np
 
-
-class Point:
+ 
+class Point(object):
     def __init__(self, x=0, y=0):
         self.x = x
         self.y = y
@@ -76,7 +76,8 @@ class Point:
 
 class Node(Point):
     def __init__(self, x,  y):
-        super().__init__(x, y)
+        super(Node, self).__init__(x, y)
+
         self.parent = None
         self.coord = (x, y)
         self.g = 0 # cost of getting to the node from the start 
@@ -95,5 +96,7 @@ class Node(Point):
             return "({}, {}, p: None)".format(np.round(self.x, 2), np.round(self.y, 2))
         else:
             return "({}, {}, p: {})".format(np.round(self.x, 2), np.round(self.y, 2), (self.parent.x,self.parent.y))
+        
+
 
     
