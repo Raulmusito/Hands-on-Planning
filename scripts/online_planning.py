@@ -7,6 +7,7 @@ from Node import Node
 import copy
 import random 
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 
 
 def wrap_angle(angle): 
@@ -39,13 +40,15 @@ class StateValidityChecker:
         bin_map = np.zeros_like(map)
         for i in range(map.shape[0]):
             for j in range(map.shape[1]):
-                if map[i,j] !=0:
+                if map[i,j] == 100:
                     bin_map[i,j] = 1
-        plt.imshow(bin_map)
+        """    plt.imshow(bin_map, cmap='gray', interpolation='nearest')
         plt.colorbar()  # Optional: to show the color bar
         plt.title("Grayscale Image")
-        plt.show()
-        return bin_map
+        plt.show() """
+        flip_map = self.rotate_and_flip(bin_map)
+
+        return np.array(flip_map)
     
     # Set occupancy map, its resolution and origin. 
     def set(self, data, resolution, origin):
@@ -100,18 +103,31 @@ class StateValidityChecker:
         if x < 0 or y < 0 or x > shape[0] or y > shape[1]: return None
         else: return np.array([xmap,ymap])
 
-    def map_to_position(m, origin, resolution, shape):
+    def map_to_position(self, m):
+        origin = self.origin
+        resolution = self.resolution
+        shape = self.map.shape
         if m[0] < 0 or m[1] < 0 or m[0] > shape[0] or m[1] > shape[1]: return None
         x,y = m[0]*resolution, (-m[1] + shape[1] )*resolution 
         x,y = x + origin[0],y+ origin[1]
         return np.array((x,y))
     
+
+    def rotate_and_flip(self, matrix):
+        # Rotate the matrix 90 clockwise (Transpose and reverse each row)
+        rotated_matrix = np.array(matrix).T[::-1]
+        
+        # Flip the matrix horizontally (reverse the columns)
+        flipped_matrix = rotated_matrix[:, ::-1]
+        
+        return flipped_matrix
+
+        
 # Define Planner class (you can take code from Autonopmous Systems course!)
 class Planner:
-    def  __init__(self, state_validity_checker, max_iterations=10000, dominion=[-10, 10, -10, 10], goal=None, start=None, step_size=0.5, goal_threshold=0.5):
+    def  __init__(self, state_validity_checker, max_iterations, dominion=[-10, 10, -10, 10], goal=None, start=None, step_size=0.5, goal_threshold=0.5):
         # define constructor ...
         self.max_iterations = max_iterations
-        print (goal[0], "    ", goal[1])
         self.goal = Node(goal[0], goal[1])##
         self.start = Node(start[0], start[1])
         self.tree = [self.start]
@@ -119,20 +135,24 @@ class Planner:
         self.map_resolution = state_validity_checker.resolution
         self.goal_threshold = goal_threshold
  
-        self.step_size = 0.5
-        self.map = (self, state_validity_checker.map)
+        self.step_size = 10
+        self.map = state_validity_checker.map
         pass
     
     def compute_path(self):
         for k in range(self.max_iterations):
+            #print("tree: ", self.tree)
             # 1. Sample a random node
             random_node = self.get_random_node(0.2) 
+            #print("random node: ", random_node)
 
             # 2. Find the nearest node in the tree
             nearest = self.nearest_node(random_node)
+            print("nearest node: ", nearest)
             
             # 3. New configuration
             qnew = self.new_config(nearest, random_node, self.step_size)
+            print("new config: ", qnew)
 
             # 4. Check if the new configuration is collision free
             if self.collision_free((nearest.x,nearest.y), (qnew.x,qnew.y)):
@@ -147,7 +167,9 @@ class Planner:
                     if self.pth_found_after == None: 
                         self.pth_found_after=k
                      """
-                    return self.tree, self.build_path(qnew)
+                    path = self.build_path(qnew)
+                    print("path found: ", path)
+                    return self.tree, path
                     
         raise AssertionError("Path not found\n")
         pass
@@ -156,8 +178,8 @@ class Planner:
         if random.random() < p:
             return self.goal
         # Get all free cells (where grid is 0)
-        print(self.map)
-        free_positions = np.argwhere(self.map == 0)
+        dist = int(m.ceil(self.robot_distance/self.map_resolution))
+        free_positions = np.argwhere(self.map[dist:-dist,dist:-dist] == 0)
         # Randomly choose one of the free cells 
         random_index = np.random.choice(len(free_positions))
         node = Node(free_positions[random_index][0],free_positions[random_index][1])
@@ -171,6 +193,7 @@ class Planner:
         distance = dist_between_points(nearest, random_node)
         if distance <= step_size:
             return random_node
+            
         else:
             theta = m.atan2(random_node.coord[1] - nearest.coord[1], random_node.coord[0] - nearest.coord[0])
             return Node(int(nearest.coord[0] + step_size * m.cos(theta)), int(nearest.coord[1] + step_size * m.sin(theta)))
@@ -180,30 +203,43 @@ class Planner:
         # Interpolate x and y coordinates
         x_values = np.linspace(point1[0], point2[0], num_steps)
         y_values = np.linspace(point1[1], point2[1], num_steps)
-
+        
         # Combine x and y into pixel coordinates
         pixels = list(zip((np.floor(x_values)).astype(int), (np.floor(y_values)).astype(int)))
 
-        for i,p in enumerate(pixels):
-            if 0 <= p[0] < self.map.grid.shape[0] and 0 <= p[1] < self.map.grid.shape[1]:
-                if self.is_valid_pixel(self,p) == False:
-                    return False
-        return True
-
+        for i in range(len(pixels)):
+            return self.is_valid_pixel(pixels[i])
+        
     def is_valid_pixel (self, pixel):
 
         # y is row, x is column
-        robot_area_p = self.robot_distance / self.map_resolution
-        fromx, fromy = pixel[0]-robot_area_p, pixel[1]-robot_area_p 
-        tox, toy = pixel[0] + robot_area_p, pixel[1]+robot_area_p, # get x,y pixels from bottom right corner of the robot threshold
 
-        #print ("top left corner pixels:", fromx,fromy)
-        #print ("botom right corner: ", tox,toy)
-        #print (map[fromx:tox,fromy:toy])
-        if fromx < 0 and fromy < 0 and tox > self.map.shape[0] and toy > self.map.shape[1]: return False
-        for i in range(fromy, toy):
-            for j in range(fromx, tox):
-                if map[i,j] == 0: return False
+        robot_area_p = self.robot_distance / self.map_resolution
+        fromx, fromy = pixel[0]-robot_area_p, pixel[1]-robot_area_p
+        tox, toy = pixel[0] + robot_area_p, pixel[1]+robot_area_p, # get x,y pixels from bottom right corner of the robot threshold
+        
+        """
+        fig, ax = plt.subplots()
+        plt.imshow(self.map, cmap='viridis', interpolation='nearest')
+        width = tox - fromx
+        height = toy - fromy
+        square = patches.Rectangle((fromx, fromy), width, height, linewidth=2, edgecolor='r', facecolor='none')
+    
+        # Add the rectangle to the plot
+        ax.add_patch(square)
+        plt.colorbar()
+        plt.show() """
+
+        if int(m.floor(fromx)) < 0 and int(m.floor(fromy)) < 0 and int(m.ceil(tox)) > self.map.shape[0] and int(m.ceil(toy)) > self.map.shape[1]: return False
+        print(range(int(m.floor(fromy)), int(m.ceil(toy))))
+        print(range(int(m.floor(fromx)), int(m.ceil(tox))))
+        print(self.robot_distance)
+        for i in range(int(m.floor(fromy)), int(m.ceil(toy))-1):
+            for j in range(int(m.floor(fromx)), int(m.ceil(tox))-1):
+                if self.map[i,j] == 1: 
+                    print ("pixel is invalid")
+                    return False
+        print ("pixel is valid")
         return True
     
     def get_edges(self,nodes):
@@ -224,7 +260,7 @@ class Planner:
             path.append(node.coord)
             node = node.parent
         path.append(node.coord)
-        return path.reverse()
+        return path[::-1]
 
 
 
@@ -232,13 +268,6 @@ class Planner:
 # StateValidityChecker class has to be used. The planning dominion must be specified as well as the maximum planning time.
 # The planner returns a path that is a list of poses ([x, y]).
 def compute_path(start_p, goal_p, state_validity_checker, dominion, max_iterations=5000):
-    start_p, goal_p = state_validity_checker.position_to_map(start_p), state_validity_checker.position_to_map(goal_p)
-    planner = Planner(state_validity_checker, max_iterations, dominion, goal_p, start_p)
-    tree, path = planner.compute_path()
-    for i in range(len(path)):
-        path[i] = [state_validity_checker.map_to_position(path[i][0]), state_validity_checker.map_to_position(path[i][1])]
-    return path
-
 
 
     # TODO: Plan a path from start_p to goal_p inside dominiont using a Planner Object and the 
@@ -246,7 +275,18 @@ def compute_path(start_p, goal_p, state_validity_checker, dominion, max_iteratio
     # TODO: if solved, return a list with the [x, y] points in the solution path.
     # example: [[x1, y1], [x2, y2], ...]
     # TODO: Ensure that the path brings the robot to the goal (with a small tolerance)!
-    return None
+
+    start_p, goal_p = state_validity_checker.position_to_map(start_p), state_validity_checker.position_to_map(goal_p)
+    planner = Planner(state_validity_checker, max_iterations, dominion, goal_p, start_p)
+    tree, path = planner.compute_path()
+    print(path)
+    for i in range(len(path)):
+        path[i] = [state_validity_checker.map_to_position(path[i])[:]]
+    print (path)
+    return path
+
+
+
 
 
 # Controller: Given the current position and the goal position, this function computes the desired 

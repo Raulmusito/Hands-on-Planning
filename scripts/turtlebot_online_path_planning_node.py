@@ -5,6 +5,8 @@ import math as m
 import rospy
 import tf
 import functions as f
+import matplotlib.pyplot as plt
+
  
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
@@ -83,6 +85,7 @@ class OnlinePlanner:
             origin = [gridmap.info.origin.position.x, gridmap.info.origin.position.y]
             self.svc.set(env, gridmap.info.resolution, origin)
 
+
             # If the robot is following a path, check if it is still valid
             if len(self.path) > 0:
                 # create total_path adding the current position to the rest of waypoints in the path
@@ -94,7 +97,6 @@ class OnlinePlanner:
     # Goal callback: Get new goal from /move_base_simple/goal topic published by rviz 
     # and computes a plan to it using self.plan() method
     def get_goal(self, goal):
-        print (1)
         #if self.svc.there_is_map:
         #    # TODO: Store goal (x,y) as a numpy aray in self.goal var and print it 
         #    self.goal = None
