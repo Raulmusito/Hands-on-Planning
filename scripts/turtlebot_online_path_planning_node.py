@@ -84,6 +84,10 @@ class OnlinePlanner:
             env = np.array(gridmap.data).reshape(gridmap.info.height, gridmap.info.width).T
             origin = [gridmap.info.origin.position.x, gridmap.info.origin.position.y]
             self.svc.set(env, gridmap.info.resolution, origin)
+            if len(self.path) > 0:
+                path_good = self.svc.check_path(self.path)
+                if not path_good:
+                    self.plan()
 
 
             # If the robot is following a path, check if it is still valid
@@ -137,8 +141,8 @@ class OnlinePlanner:
     def controller(self, event):
         v = 0
         w = 0
-        if len(self.path) > 0 and 0:
-            if dist_between_points(self.current_pose[0:2], self.path[0]) <= self.dist_threshold:# If current waypoint is reached with some tolerance move to the next waypoint. 
+        if len(self.path) > 0:
+            if dist_between_points(self.current_pose[0:2], self.path[0]) <= 0.05:# If current waypoint is reached with some tolerance move to the next waypoint. 
                 del self.path[0]
                 # If it was the last waypoint in the path show a message indicating it
                 if len(self.path) == 0:
@@ -171,7 +175,7 @@ class OnlinePlanner:
         if len(self.path) > 1:
             print("Publish path!")
             m = Marker()
-            m.header.frame_id = 'odom'
+            m.header.frame_id = 'world_ned'
             m.header.stamp = rospy.Time.now()
             m.id = 0
             m.type = Marker.LINE_STRIP
@@ -222,6 +226,7 @@ class OnlinePlanner:
 # MAIN FUNCTION
 if __name__ == '__main__':
     rospy.init_node('turtlebot_online_path_planning_node')   
+
     node = OnlinePlanner('/projected_map', '/odom', '/turtlebot/kobuki/commands/velocity', np.array([-10.0, 10.0, -10.0, 10.0]), 0.2)
     
     # Run forever

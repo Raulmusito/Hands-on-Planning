@@ -80,6 +80,7 @@ class Node(Point):
 
         self.parent = None
         self.coord = (x, y)
+        self.bottom_left_coord = (x-4, y-4)
         self.g = 0 # cost of getting to the node from the start 
 
     def __eq__(self, node):
