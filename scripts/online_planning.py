@@ -102,9 +102,9 @@ class StateValidityChecker:
     def map_to_position(self, m):
         origin = self.origin
         resolution = self.resolution
-        shape = self.map.shape
+        shape = self.map.shape #y,x
 
-        if m[0] < 0 or m[1] < 0 or m[0] > shape[0] or m[1] > shape[1]: return None
+        if m[0] <= 0 or m[1] <= 0 or m[0] >= shape[1] or m[1] >= shape[0]: return None
         
         x,y = (shape[1]-m[0])*resolution, (shape[0]-m[1])*resolution 
         x,y = x + origin[0],y+ origin[1]
@@ -127,37 +127,46 @@ class StateValidityChecker:
         y_values = np.linspace(point1[1], point2[1], num_steps)
         
         # Combine x and y into pixel coordinates
-        pixels = list(zip((np.floor(x_values)).astype(int), (np.floor(y_values)).astype(int)))
-        if len(pixels) == 0: return False
-        for i in range(len(pixels)):
+        positions = list(zip(x_values, y_values))
+        if len(positions) == 0: return False
+        for i in range(len(positions)):
 
-            reply = self.is_valid_pixel(pixels[i])
+            reply = self.is_valid_pixel(positions[i])
 
             if reply == False: return False
         return True
         
-    def is_valid_pixel (self, pixel):
-
+    def is_valid_pixel (self, position):
         # y is row, x is column
 
-        distance_pixel = int(self.distance / self.resolution)
+        #distance_pixel = int(round(self.distance / self.resolution))
         
-        fromx, fromy = pixel[0]-distance_pixel, pixel[1]-distance_pixel
-        tox, toy = pixel[0] + distance_pixel, pixel[1]+distance_pixel # get x,y pixels from bottom right corner of the robot threshold
+        fromx, fromy = position[0]+self.distance, position[1]+self.distance
+        tox, toy = position[0] - self.distance, position[1]-self.distance # get x,y pixels from bottom right corner of the robot threshold
         
-        if int(m.floor(fromx)) < 0 or int(m.floor(fromy)) < 0: return False
-        if int(round(tox)) > self.map.shape[0] or int(m.ceil(toy)) > self.map.shape[0]: return False
-        #if pixel[0] > 95: print (pixel[0])
+        map_coords = self.map_to_position([self.map.shape[1], self.map.shape[0]])
 
-        for i in range(int(m.floor(fromy)), int(m.ceil(toy))):
-            for j in range(int(m.floor(fromx)), int(m.ceil(tox))):
+        map_coords_zero = self.map_to_position([0, 0])
+
+        if fromx < map_coords_zero[0] or fromy < map_coords_zero[0]: return False
+        print (self.map.shape)  # y,x
+
+        print ("position", position)
+        print ("fromx, fromy", fromx, fromy)
+        print ("tox, toy", tox, toy)
+        print ("map_coords", map_coords)
+
+        if tox > map_coords[1] or toy > map_coords[0]: return False
+        
+        for i in range(self.position_to_map(fromy), self.position_to_map(toy)):
+            for j in range(self.position_to_map(fromx), self.position_to_map(tox)):
                 if self.map[i,j] == 1: 
                     return False
         return True
     
     def check_path(self, path):
         for i in range(len(path)-1):
-            if not self.collision_free(self.position_to_map(path[i]), self.position_to_map(path[i+1])):
+            if not self.collision_free(path[i], path[i+1]):
                 print ("Collision between ", path[i], path[i+1])
                 return False
         return True
@@ -173,11 +182,9 @@ class Planner:
         self.goal = Node(goal[0], goal[1])##
         self.start = Node(start[0], start[1])
         self.tree = [self.start]
-        self.robot_distance = state_validity_checker.distance
-        self.map_resolution = state_validity_checker.resolution
         self.goal_threshold = goal_threshold
         self.svc = state_validity_checker
-        self.step_size = 3
+        self.step_size = 0.15
         self.map = state_validity_checker.map
         self.smooth = smooth
         pass
@@ -246,14 +253,15 @@ class Planner:
         return path
 
     def get_random_node(self,p):
+
+        # Randomly choose the goal with probability p
         if random.random() < p:
             return self.goal
-        # Get all free cells (where grid is 0)
-        free_positions = np.argwhere(self.map == 0)
-        # Randomly choose one of the free cells 
-        random_index = np.random.choice(len(free_positions))
-        node = Node(free_positions[random_index][0],free_positions[random_index][1])
-
+        
+        # Randomly choose a point in the map
+        x = np.random.random (0, self.svc.map_to_position(self.svc.map.shape[0]))
+        y = np.random.random (0, self.svc.map_to_position(self.svc.map.shape[1]))
+        node = Node(x,y)
         return node
     
     def nearest_node(self, random_node):
@@ -300,7 +308,6 @@ def compute_path(start_p, goal_p, state_validity_checker, dominion, max_iteratio
     # example: [[x1, y1], [x2, y2], ...]
     # TODO: Ensure that the path brings the robot to the goal (with a small tolerance)!
 
-    start_p, goal_p = state_validity_checker.position_to_map(start_p), state_validity_checker.position_to_map(goal_p)
     planner = Planner(state_validity_checker, max_iterations, dominion, goal_p, start_p)
 
 
