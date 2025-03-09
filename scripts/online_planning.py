@@ -62,7 +62,7 @@ class StateValidityChecker:
     # Given a pose, returs true if the pose is not in collision and false othewise.
     #def is_valid(self, pose): 
 
-    def is_valid(self, p, distance, map, resolution, orig, shape):
+        """     def is_valid(self, p, distance, map, resolution, orig, shape):
         
         # convert world robot position to map coordinates using method __position_to_map__
         # check occupancy of the vicinity of a robot position (indicated by self.distance atribute). 
@@ -79,7 +79,7 @@ class StateValidityChecker:
         for i in range(fromx, tox):
             for j in range(fromy, toy):
                 if map[i,j] == 0: return False
-        return True
+        return True """
 
     # Given a path, returs true if thaose path is not in collision and false othewise.
     def check_path(self, path):
@@ -121,7 +121,7 @@ class StateValidityChecker:
         return flipped_matrix
     
     def collision_free(self, point1, point2):
-        num_steps = max(abs(point2[0] - point1[0]), abs(point2[1] - point1[1])) + 1
+        num_steps = max(abs(point2[0] - point1[0]), abs(point2[1] - point1[1])) +1
         # Interpolate x and y coordinates
         x_values = np.linspace(point1[0], point2[0], num_steps)
         y_values = np.linspace(point1[1], point2[1], num_steps)
@@ -130,6 +130,7 @@ class StateValidityChecker:
         pixels = list(zip((np.floor(x_values)).astype(int), (np.floor(y_values)).astype(int)))
         if len(pixels) == 0: return False
         for i in range(len(pixels)):
+
             reply = self.is_valid_pixel(pixels[i])
 
             if reply == False: return False
@@ -139,12 +140,17 @@ class StateValidityChecker:
 
         # y is row, x is column
 
-        robot_area_p = self.distance / self.resolution
-        fromx, fromy = pixel[0]-robot_area_p, pixel[1]-robot_area_p
-        tox, toy = pixel[0] + robot_area_p, pixel[1]+robot_area_p, # get x,y pixels from bottom right corner of the robot threshold
-        if int(m.floor(fromx)) < 0 or int(m.floor(fromy)) < 0 or int(m.ceil(tox)) > self.map.shape[0] or int(m.ceil(toy)) > self.map.shape[0]: return False
-        for i in range(int(m.floor(fromy)), int(m.ceil(toy))-1):
-            for j in range(int(m.floor(fromx)), int(m.ceil(tox))-1):
+        distance_pixel = int(self.distance / self.resolution)
+        
+        fromx, fromy = pixel[0]-distance_pixel, pixel[1]-distance_pixel
+        tox, toy = pixel[0] + distance_pixel, pixel[1]+distance_pixel # get x,y pixels from bottom right corner of the robot threshold
+        
+        if int(m.floor(fromx)) < 0 or int(m.floor(fromy)) < 0: return False
+        if int(round(tox)) > self.map.shape[0] or int(m.ceil(toy)) > self.map.shape[0]: return False
+        #if pixel[0] > 95: print (pixel[0])
+
+        for i in range(int(m.floor(fromy)), int(m.ceil(toy))):
+            for j in range(int(m.floor(fromx)), int(m.ceil(tox))):
                 if self.map[i,j] == 1: 
                     return False
         return True
@@ -161,7 +167,7 @@ class StateValidityChecker:
         
 # Define Planner class (you can take code from Autonopmous Systems course!)
 class Planner:
-    def  __init__(self, state_validity_checker, max_iterations, dominion=[-10, 10, -10, 10], goal=None, start=None, goal_threshold=0.5, smooth=True):
+    def  __init__(self, state_validity_checker, max_iterations, dominion=[-10, 10, -10, 10], goal=None, start=None, goal_threshold=0.05, smooth=True):
         # define constructor ...
         self.max_iterations = max_iterations
         self.goal = Node(goal[0], goal[1])##
@@ -171,12 +177,14 @@ class Planner:
         self.map_resolution = state_validity_checker.resolution
         self.goal_threshold = goal_threshold
         self.svc = state_validity_checker
-        self.step_size = 10
+        self.step_size = 3
         self.map = state_validity_checker.map
         self.smooth = smooth
         pass
     
     def compute_path(self):
+        if self.svc.is_valid_pixel(self.goal.coord) == False:
+            raise AssertionError("Goal is in collision\n")
         for k in range(self.max_iterations):
             # 1. Sample a random node
             random_node = self.get_random_node(0.2) 
@@ -186,9 +194,9 @@ class Planner:
             
             # 3. New configuration
             qnew = self.new_config(nearest, random_node, self.step_size)
-
             # 4. Check if the new configuration is collision free
             if self.svc.collision_free((nearest.x,nearest.y), (qnew.x,qnew.y)):
+
                 qnew.parent = nearest
 
                 # 5. Check if goal is reached
@@ -199,8 +207,9 @@ class Planner:
                     path1, node_path = self.build_path(qnew)
                     if self.smooth:
                         path = self.smooth_path(node_path)
-                        return self.tree, path
-                    return self.tree, path1
+                        return self.tree, path[1:]  # The robot is already at the first node, so we skip it
+                    return self.tree, path1[1:]
+                
         x_values = [node.x for node in self.tree]
         y_values = [node.y for node in self.tree]
         plt.imshow(self.map, cmap='gray', origin='upper')  # Display the binary map
@@ -211,6 +220,7 @@ class Planner:
         plt.title('Binary Map with Path')
         plt.legend()
         plt.show() 
+        plt.grid()
         raise AssertionError("Path not found\n")
         
 
@@ -313,11 +323,12 @@ def move_to_point(current, current_yaw, goal, Kv=0.5, Kw=0.5):
     # This function should return only  linear velocity (v) and angular velocity (w)
 
     angle_error = current_yaw - m.atan2( goal[1]- current[1],  goal[0]-current[0]) 
-    if abs(angle_error) > 0.0873 :# anglular error is greater than anglular threshold 0.0873 rad = no idea deg app 5/2
+    angle_error = wrap_angle(angle_error)
+    if abs(angle_error) > 0.04 :# anglular error is greater than anglular threshold 0.0873 rad = no idea deg app 5/2
         w = angle_error * Kw
         v = 0
     else:
-        w = 0
+        w = angle_error * Kw
         v = Kv * dist_between_points(current,goal)
     
     return  v, w

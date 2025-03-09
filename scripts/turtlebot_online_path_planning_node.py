@@ -122,7 +122,13 @@ class OnlinePlanner:
 
         print("Compute new path")
         # TODO: plan a path from self.current_pose to self.goal
-        self.path = compute_path(self.current_pose[0:2], self.goal[0:2], self.svc, self.dominion )
+        #        
+        try:
+            self.path = compute_path(self.current_pose[0:2], self.goal[0:2], self.svc, self.dominion )
+        except AssertionError as e:
+            print("Error occurred:", e)
+            self.path = []
+
         # TODO: If planning fails, consider increasing the planning time, retry the planning a few times, etc.
         #pass
 
@@ -142,7 +148,7 @@ class OnlinePlanner:
         v = 0
         w = 0
         if len(self.path) > 0:
-            if dist_between_points(self.current_pose[0:2], self.path[0]) <= 0.05:# If current waypoint is reached with some tolerance move to the next waypoint. 
+            if dist_between_points(self.current_pose[0:2], self.path[0]) <= 0.02:# If current waypoint is reached with some tolerance move to the next waypoint. 
                 del self.path[0]
                 # If it was the last waypoint in the path show a message indicating it
                 if len(self.path) == 0:
