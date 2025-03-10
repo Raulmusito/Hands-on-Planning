@@ -2,7 +2,6 @@
 
 import numpy as np
 import math as m
-import numpy as np
 from Node import Node
 import copy
 import random 
@@ -81,12 +80,6 @@ class StateValidityChecker:
                 if map[i,j] == 0: return False
         return True """
 
-    # Given a path, returs true if thaose path is not in collision and false othewise.
-    def check_path(self, path):
-        pass
-        # TODO: Discretize the positions between 2 waypoints with an step_size = 2*self.distance
-        # TODO: for each point check if `is_valid``. If only one element is not valid return False, otherwise True. 
-
     # Transform position with respect the map origin to cell coordinates
     def position_to_map(self, point):
         origin = self.origin
@@ -120,7 +113,7 @@ class StateValidityChecker:
 
         return flipped_matrix
     
-    def collision_free(self, point1, point2):
+    def collision_free(self, point1, point2, plot=False):
         num_steps = max(abs(point2[0] - point1[0]), abs(point2[1] - point1[1])) +1
         # Interpolate x and y coordinates
         x_values = np.linspace(point1[0], point2[0], num_steps)
@@ -131,28 +124,36 @@ class StateValidityChecker:
         if len(pixels) == 0: return False
         for i in range(len(pixels)):
 
-            reply = self.is_valid_pixel(pixels[i])
+            reply = self.is_valid_pixel(pixels[i], plot)
 
             if reply == False: return False
         return True
         
-    def is_valid_pixel (self, pixel):
+    def is_valid_pixel (self, pixel, plot = False):
 
         # y is row, x is column
 
-        distance_pixel = int(self.distance / self.resolution)
+        distance_pixel = int(self.distance / self.resolution)+1
         
         fromx, fromy = pixel[0]-distance_pixel, pixel[1]-distance_pixel
         tox, toy = pixel[0] + distance_pixel, pixel[1]+distance_pixel # get x,y pixels from bottom right corner of the robot threshold
         
         if int(m.floor(fromx)) < 0 or int(m.floor(fromy)) < 0: return False
-        if int(round(tox)) > self.map.shape[0] or int(m.ceil(toy)) > self.map.shape[0]: return False
+        if int(round(tox)) > self.map.shape[1] or int(m.ceil(toy)) > self.map.shape[0]: return False
         #if pixel[0] > 95: print (pixel[0])
+        if plot:
+            fig, ax = plt.subplots()
+            ax.imshow(self.map, cmap='gray', origin='upper')
+            rect = patches.Rectangle((fromx, fromy), tox-fromx, toy-fromy, linewidth=1, edgecolor='r', facecolor='none')
+            ax.add_patch(rect)
+            plt.show()
+
+            print (self.map[fromy:toy,fromx:tox])
 
         for i in range(int(m.floor(fromy)), int(m.ceil(toy))):
             for j in range(int(m.floor(fromx)), int(m.ceil(tox))):
                 if self.map[i,j] == 1: 
-                    return False
+                    return False 
         return True
     
     def check_path(self, path):
@@ -183,8 +184,8 @@ class Planner:
         pass
     
     def compute_path(self):
-        if self.svc.is_valid_pixel(self.goal.coord) == False:
-            raise AssertionError("Goal is in collision\n")
+        if self.svc.is_valid_pixel(self.goal.coord) == False or self.svc.is_valid_pixel(self.start.coord, plot = True) == False:
+            raise AssertionError("Start or goal is in collision, Please restart the simulation")
         for k in range(self.max_iterations):
             # 1. Sample a random node
             random_node = self.get_random_node(0.2) 
@@ -207,8 +208,8 @@ class Planner:
                     path1, node_path = self.build_path(qnew)
                     if self.smooth:
                         path = self.smooth_path(node_path)
-                        return self.tree, path[1:]  # The robot is already at the first node, so we skip it
-                    return self.tree, path1[1:]
+                        return self.tree, path  # The robot is already at the first node, so we skip it
+                    return self.tree, path1
                 
         x_values = [node.x for node in self.tree]
         y_values = [node.y for node in self.tree]
@@ -291,7 +292,7 @@ class Planner:
 # Planner: This function has to plan a path from start_p to goal_p. To check if a position is valid the 
 # StateValidityChecker class has to be used. The planning dominion must be specified as well as the maximum planning time.
 # The planner returns a path that is a list of poses ([x, y]).
-def compute_path(start_p, goal_p, state_validity_checker, dominion, max_iterations=5000):
+def compute_path(start_p, goal_p, state_validity_checker, dominion, max_iterations= 10000):
 
 
     # TODO: Plan a path from start_p to goal_p inside dominiont using a Planner Object and the 
@@ -306,12 +307,19 @@ def compute_path(start_p, goal_p, state_validity_checker, dominion, max_iteratio
 
     tree, path = planner.compute_path()
 
+    user_input = 0# bool(input("Wanna plot? '1' or '0': "))
+
+    if user_input:
+        for i in range(len(path)-1):
+            test = state_validity_checker.collision_free(path[i], path[i+1], plot=True)
+            print ("Collision free between ", path[i], path[i+1], "= ",test)
+
     for i in range(len(path)):
         new = state_validity_checker.map_to_position(path[i])[:]
         path[i] = [new[0], new[1]]
     
 
-    return path
+    return path[1:]
 
 # Controller: Given the current position and the goal position, this function computes the desired 
 # lineal velocity and angular velocity to be applied in order to reah the goal.

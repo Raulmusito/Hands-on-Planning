@@ -178,8 +178,8 @@ class OnlinePlanner:
 
     # Publish a path as a series of line markers
     def publish_path(self):
+        self.path.insert(0, self.current_pose[0:2])
         if len(self.path) > 1:
-            print("Publish path!")
             m = Marker()
             m.header.frame_id = 'world_ned'
             m.header.stamp = rospy.Time.now()
@@ -227,6 +227,7 @@ class OnlinePlanner:
                 m.colors.append(color_red)
             
             self.marker_pub.publish(m)
+            print ("path published")
             
             
 # MAIN FUNCTION
