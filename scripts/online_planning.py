@@ -43,12 +43,7 @@ class StateValidityChecker:
             for j in range(map.shape[1]):
                 if map[i,j] == 100:
                     bin_map[i,j] = 1
-        """    plt.imshow(bin_map, cmap='gray', interpolation='nearest')
-        plt.colorbar()  # Optional: to show the color bar
-        plt.title("Grayscale Image")
-        plt.show() """
         flip_map = self.rotate_and_flip(bin_map)
-
         return np.array(flip_map)
     
     # Set occupancy map, its resolution and origin. 
@@ -84,12 +79,12 @@ class StateValidityChecker:
     def position_to_map(self, point):
         origin = self.origin
         resolution = self.resolution
-        shape = self.map.shape
+        shape = self.map.shape  # map shape is height, width
 
         # this function variates from the requiered, since it asumes that the reference from the grid map is in the top left corner 
         x,y = point-origin #x,y are already in map (occupancy grid) coordinates
         xmap, ymap = shape[1] - int(x/resolution), shape[0] - int(y/resolution)
-        if x < 0 or y < 0 or x > shape[0] or y > shape[1]: return None
+        if x < 0 or y < 0 or x > shape[1] or y > shape[0]: print ("error while converting map"); return None
         else: return np.array([xmap,ymap])
 
     def map_to_position(self, m):
@@ -97,7 +92,7 @@ class StateValidityChecker:
         resolution = self.resolution
         shape = self.map.shape
 
-        if m[0] < 0 or m[1] < 0 or m[0] > shape[0] or m[1] > shape[1]: return None
+        if m[0] < 0 or m[1] < 0 or m[0] > shape[1] or m[1] > shape[0]: print("error while converting to position"); return None
         
         x,y = (shape[1]-m[0])*resolution, (shape[0]-m[1])*resolution 
         x,y = x + origin[0],y+ origin[1]
@@ -141,7 +136,7 @@ class StateValidityChecker:
         if int(m.floor(fromx)) < 0 or int(m.floor(fromy)) < 0: return False
         if int(round(tox)) > self.map.shape[1] or int(m.ceil(toy)) > self.map.shape[0]: return False
         #if pixel[0] > 95: print (pixel[0])
-        if plot:
+        if plot and 0:
             fig, ax = plt.subplots()
             ax.imshow(self.map, cmap='gray', origin='upper')
             rect = patches.Rectangle((fromx, fromy), tox-fromx, toy-fromy, linewidth=1, edgecolor='r', facecolor='none')
@@ -150,8 +145,8 @@ class StateValidityChecker:
 
             print (self.map[fromy:toy,fromx:tox])
 
-        for i in range(int(m.floor(fromy)), int(m.ceil(toy))):
-            for j in range(int(m.floor(fromx)), int(m.ceil(tox))):
+        for i in range(int(round(fromy)), int(round(toy))):
+            for j in range(int(round(fromx)+1), int(round(tox))):
                 if self.map[i,j] == 1: 
                     return False 
         return True
@@ -213,7 +208,7 @@ class Planner:
                 
         x_values = [node.x for node in self.tree]
         y_values = [node.y for node in self.tree]
-        plt.imshow(self.map, cmap='gray', origin='upper')  # Display the binary map
+        """ plt.imshow(self.map, cmap='gray', origin='upper')  # Display the binary map
         plt.colorbar(label="Binary Map Value")  # Optional: color bar for reference
         plt.plot(x_values, y_values, marker='o', color='g', linestyle="" ,markersize=3, label="Tree")  # Path as a red line with circles
         plt.xlabel('X Coordinate')
@@ -221,7 +216,7 @@ class Planner:
         plt.title('Binary Map with Path')
         plt.legend()
         plt.show() 
-        plt.grid()
+        plt.grid() """
         raise AssertionError("Path not found\n")
         
 
